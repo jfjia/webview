@@ -1307,6 +1307,8 @@ window.__webview__.onUnbind(" +
 
   noresult eval(const std::string &js) { return eval_impl(js); }
 
+  void setMessageHandler(const std::function<void(const std::string &)> &handler) { messageHandler_ = handler; }
+
 protected:
   virtual noresult navigate_impl(const std::string &url) = 0;
   virtual result<void *> window_impl() = 0;
@@ -1460,6 +1462,9 @@ protected:
     auto args = json_parse(msg, "params", 0);
     auto found = bindings.find(name);
     if (found == bindings.end()) {
+      if (messageHandler_) {
+        messageHandler_(msg);
+      }
       return;
     }
     const auto &context = found->second;
@@ -1495,6 +1500,7 @@ private:
   std::map<std::string, binding_ctx_t> bindings;
   user_script *m_bind_script{};
   std::list<user_script> m_user_scripts;
+  std::function<void(const std::string &)> messageHandler_;
 };
 
 } // namespace detail
@@ -2701,7 +2707,7 @@ auto parse_version(const T (&version)[Length]) noexcept {
   return parse_version(std::basic_string<T>(version, Length));
 }
 
-std::wstring get_file_version_string(const std::wstring &file_path) noexcept {
+inline std::wstring get_file_version_string(const std::wstring &file_path) noexcept {
   DWORD dummy_handle; // Unused
   DWORD info_buffer_length =
       GetFileVersionInfoSizeW(file_path.c_str(), &dummy_handle);
@@ -4060,6 +4066,7 @@ private:
     }
     wchar_t userDataFolder[MAX_PATH];
     PathCombineW(userDataFolder, dataPath, currentExeName);
+    PathRemoveExtensionW(userDataFolder);
 
     m_com_handler = new webview2_com_handler(
         wnd, cb,
@@ -4237,7 +4244,7 @@ using webview = browser_engine;
 
 namespace detail {
 
-webview *cast_to_webview(void *w) {
+inline webview *cast_to_webview(void *w) {
   if (!w) {
     throw exception{WEBVIEW_ERROR_INVALID_ARGUMENT,
                     "Cannot cast null pointer to webview instance"};
